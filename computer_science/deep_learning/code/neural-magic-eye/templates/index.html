@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Magic Eye - Style Transfer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .img-container {
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8f9fa;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .img-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .result-card {
+            margin-bottom: 20px;
+        }
+        .parameter-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .parameter-slider {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Neural Magic Eye - Style Transfer</h1>
+        
+        <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="decode-tab" data-bs-toggle="tab" data-bs-target="#decode" type="button" role="tab">Decode Stereogram</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="create-tab" data-bs-toggle="tab" data-bs-target="#create" type="button" role="tab">Create Stereogram</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer" type="button" role="tab">Style Transfer</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="myTabContent">
+            <!-- Decode Stereogram Tab -->
+            <div class="tab-pane fade show active" id="decode" role="tabpanel" aria-labelledby="decode-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <form id="uploadStereogramForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="stereogramFile" class="form-label">Upload Stereogram Image</label>
+                                <input class="form-control" type="file" id="stereogramFile" name="file" accept=".png,.jpg,.jpeg">
+                            </div>
+                            
+                            <div class="parameter-section">
+                                <h5>Depth Map Parameters</h5>
+                                <div class="parameter-slider">
+                                    <label for="p_min" class="form-label">P Min (Normalization Factor): <span id="p_min_value">0.02</span></label>
+                                    <input type="range" class="form-range" id="p_min" name="p_min" min="0.01" max="0.1" step="0.01" value="0.02" oninput="document.getElementById('p_min_value').textContent = this.value">
+                                </div>
+                                <div class="parameter-slider">
+                                    <label for="p_max" class="form-label">P Max (Normalization Factor): <span id="p_max_value">0.02</span></label>
+                                    <input type="range" class="form-range" id="p_max" name="p_max" min="0.01" max="0.1" step="0.01" value="0.02" oninput="document.getElementById('p_max_value').textContent = this.value">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary" id="extractDepthBtn">Extract Depth Map</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="img-container" id="depthPreviewContainer">
+                            <p class="text-muted">Depth map preview will appear here</p>
+                        </div>
+                        <div id="decodeResult" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Create Stereogram Tab -->
+            <div class="tab-pane fade" id="create" role="tabpanel" aria-labelledby="create-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <form id="uploadDepthMapForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="depthMapFile" class="form-label">Upload Depth Map Image</label>
+                                <input class="form-control" type="file" id="depthMapFile" name="file" accept=".png,.jpg,.jpeg">
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="uploadDepthBtn">Upload Depth Map</button>
+                        </form>
+                        
+                        <div class="mt-4" id="textureSelection" style="display: none;">
+                            <h5>Select Textures</h5>
+                            <div class="form-check">
+                                <input class="form-check-input texture-type" type="checkbox" value="random" id="randomTexture" checked>
+                                <label class="form-check-label" for="randomTexture">Random</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input texture-type" type="checkbox" value="noise" id="noiseTexture" checked>
+                                <label class="form-check-label" for="noiseTexture">Noise</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input texture-type" type="checkbox" value="stripes" id="stripesTexture" checked>
+                                <label class="form-check-label" for="stripesTexture">Stripes</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input texture-type" type="checkbox" value="dots" id="dotsTexture" checked>
+                                <label class="form-check-label" for="dotsTexture">Dots</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input texture-type" type="checkbox" value="gradient" id="gradientTexture" checked>
+                                <label class="form-check-label" for="gradientTexture">Gradient</label>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <form id="uploadTextureForm" enctype="multipart/form-data">
+                                    <div class="mb-3">
+                                        <label for="textureFile" class="form-label">Upload Custom Texture</label>
+                                        <input class="form-control" type="file" id="textureFile" name="file" accept=".png,.jpg,.jpeg">
+                                    </div>
+                                    <button type="submit" class="btn btn-outline-secondary" id="uploadTextureBtn">Upload Texture</button>
+                                </form>
+                            </div>
+                            
+                            <div class="parameter-section mt-4">
+                                <h5>3D Effect Parameters</h5>
+                                <div class="mb-3">
+                                    <label for="effectStrength" class="form-label">Effect Strength Preset</label>
+                                    <select class="form-select" id="effectStrength">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="parameter-slider">
+                                    <label for="custom_beta" class="form-label">Custom Beta (3D Depth): <span id="custom_beta_value">0.05</span></label>
+                                    <input type="range" class="form-range" id="custom_beta" min="0.01" max="0.1" step="0.01" value="0.05" oninput="document.getElementById('custom_beta_value').textContent = this.value">
+                                </div>
+                                <div class="parameter-slider">
+                                    <label for="custom_tile_percentage" class="form-label">Custom Tile Width (%): <span id="custom_tile_percentage_value">10</span></label>
+                                    <input type="range" class="form-range" id="custom_tile_percentage" min="5" max="20" step="1" value="10" oninput="document.getElementById('custom_tile_percentage_value').textContent = this.value">
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" id="generateStereogramBtn">Generate Stereograms</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="img-container" id="depthMapPreviewContainer">
+                            <p class="text-muted">Depth map preview will appear here</p>
+                        </div>
+                        <div id="uploadedTextures" class="mt-3"></div>
+                        <div id="createResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Style Transfer Tab -->
+            <div class="tab-pane fade" id="transfer" role="tabpanel" aria-labelledby="transfer-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <form id="uploadTransferStereogramForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="transferStereogramFile" class="form-label">Upload Stereogram for Style Transfer</label>
+                                <input class="form-control" type="file" id="transferStereogramFile" name="file" accept=".png,.jpg,.jpeg">
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="uploadTransferBtn">Upload Stereogram</button>
+                        </form>
+                        
+                        <div class="mt-4" id="transferTextureSelection" style="display: none;">
+                            <h5>Select Textures for Style Transfer</h5>
+                            <div class="form-check">
+                                <input class="form-check-input transfer-texture-type" type="checkbox" value="random" id="transferRandomTexture" checked>
+                                <label class="form-check-label" for="transferRandomTexture">Random</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input transfer-texture-type" type="checkbox" value="noise" id="transferNoiseTexture" checked>
+                                <label class="form-check-label" for="transferNoiseTexture">Noise</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input transfer-texture-type" type="checkbox" value="stripes" id="transferStripesTexture" checked>
+                                <label class="form-check-label" for="transferStripesTexture">Stripes</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input transfer-texture-type" type="checkbox" value="dots" id="transferDotsTexture" checked>
+                                <label class="form-check-label" for="transferDotsTexture">Dots</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input transfer-texture-type" type="checkbox" value="gradient" id="transferGradientTexture" checked>
+                                <label class="form-check-label" for="transferGradientTexture">Gradient</label>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <form id="uploadTransferTextureForm" enctype="multipart/form-data">
+                                    <div class="mb-3">
+                                        <label for="transferTextureFile" class="form-label">Upload Custom Texture</label>
+                                        <input class="form-control" type="file" id="transferTextureFile" name="file" accept=".png,.jpg,.jpeg">
+                                    </div>
+                                    <button type="submit" class="btn btn-outline-secondary" id="uploadTransferTextureBtn">Upload Texture</button>
+                                </form>
+                            </div>
+                            
+                            <div class="parameter-section mt-4">
+                                <h5>Depth Map Parameters</h5>
+                                <div class="parameter-slider">
+                                    <label for="transfer_p_min" class="form-label">P Min (Normalization Factor): <span id="transfer_p_min_value">0.02</span></label>
+                                    <input type="range" class="form-range" id="transfer_p_min" min="0.01" max="0.1" step="0.01" value="0.02" oninput="document.getElementById('transfer_p_min_value').textContent = this.value">
+                                </div>
+                                <div class="parameter-slider">
+                                    <label for="transfer_p_max" class="form-label">P Max (Normalization Factor): <span id="transfer_p_max_value">0.02</span></label>
+                                    <input type="range" class="form-range" id="transfer_p_max" min="0.01" max="0.1" step="0.01" value="0.02" oninput="document.getElementById('transfer_p_max_value').textContent = this.value">
+                                </div>
+                            </div>
+                            
+                            <div class="parameter-section mt-4">
+                                <h5>3D Effect Parameters</h5>
+                                <div class="mb-3">
+                                    <label for="transferEffectStrength" class="form-label">Effect Strength Preset</label>
+                                    <select class="form-select" id="transferEffectStrength">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="parameter-slider">
+                                    <label for="transfer_custom_beta" class="form-label">Custom Beta (3D Depth): <span id="transfer_custom_beta_value">0.05</span></label>
+                                    <input type="range" class="form-range" id="transfer_custom_beta" min="0.01" max="0.1" step="0.01" value="0.05" oninput="document.getElementById('transfer_custom_beta_value').textContent = this.value">
+                                </div>
+                                <div class="parameter-slider">
+                                    <label for="transfer_custom_tile_percentage" class="form-label">Custom Tile Width (%): <span id="transfer_custom_tile_percentage_value">10</span></label>
+                                    <input type="range" class="form-range" id="transfer_custom_tile_percentage" min="5" max="20" step="1" value="10" oninput="document.getElementById('transfer_custom_tile_percentage_value').textContent = this.value">
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" id="transferStyleBtn">Transfer Style</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="img-container" id="transferStereogramPreviewContainer">
+                            <p class="text-muted">Original stereogram preview will appear here</p>
+                        </div>
+                        <div class="img-container" id="extractedDepthPreviewContainer">
+                            <p class="text-muted">Extracted depth map will appear here</p>
+                        </div>
+                        <div id="uploadedTransferTextures" class="mt-3"></div>
+                        <div id="transferResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Utility functions
+        function showMessage(container, message, type = 'danger') {
+            container.innerHTML = `<div class="alert alert-${type}" role="alert">${message}</div>`;
+        }
+        
+        function showImage(container, imageUrl, altText = 'Image') {
+            container.innerHTML = `<img src="${imageUrl}" alt="${altText}" />`;
+        }
+        
+        // Upload stereogram for depth extraction
+        document.getElementById('uploadStereogramForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            // Add normalization parameters
+            formData.append('p_min', document.getElementById('p_min').value);
+            formData.append('p_max', document.getElementById('p_max').value);
+            
+            fetch('/upload-stereogram', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showImage(document.getElementById('depthPreviewContainer'), data.depth_map_preview, 'Depth Map');
+                    document.getElementById('decodeResult').innerHTML = `
+                        <div class="alert alert-success">
+                            <p>Depth map extracted successfully!</p>
+                        </div>`;
+                } else {
+                    showMessage(document.getElementById('decodeResult'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('decodeResult'), 'Error: ' + error);
+            });
+        });
+        
+        // Upload depth map
+        document.getElementById('uploadDepthMapForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('/upload-depth-map', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showImage(document.getElementById('depthMapPreviewContainer'), data.depth_map_preview, 'Depth Map');
+                    document.getElementById('textureSelection').style.display = 'block';
+                    window.depthMapPath = data.depth_map_path;
+                } else {
+                    showMessage(document.getElementById('createResults'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('createResults'), 'Error: ' + error);
+            });
+        });
+        
+        // Upload texture
+        document.getElementById('uploadTextureForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('/upload-texture', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const textureContainer = document.getElementById('uploadedTextures');
+                    const textureDiv = document.createElement('div');
+                    textureDiv.className = 'custom-texture mb-3';
+                    textureDiv.innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Custom Texture</h5>
+                                <div style="height: 100px; display: flex; align-items: center; justify-content: center;">
+                                    <img src="${data.texture_preview}" style="max-height: 100px; max-width: 100%;" />
+                                </div>
+                                <input type="hidden" class="texture-path" value="${data.texture_path}" />
+                            </div>
+                        </div>
+                    `;
+                    textureContainer.appendChild(textureDiv);
+                } else {
+                    showMessage(document.getElementById('createResults'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('createResults'), 'Error: ' + error);
+            });
+        });
+        
+        // Generate stereogram
+        document.getElementById('generateStereogramBtn').addEventListener('click', function() {
+            if (!window.depthMapPath) {
+                showMessage(document.getElementById('createResults'), 'Please upload a depth map first');
+                return;
+            }
+            
+            // Get selected texture types
+            const textureTypes = Array.from(document.querySelectorAll('.texture-type:checked')).map(cb => cb.value);
+            
+            // Get custom textures
+            const customTexturePaths = Array.from(document.querySelectorAll('.custom-texture .texture-path')).map(input => input.value);
+            
+            // Get effect strength
+            const effect = document.getElementById('effectStrength').value;
+            
+            // Get custom parameters
+            const useCustomParams = true;
+            const customBeta = document.getElementById('custom_beta').value;
+            const customTilePercentage = document.getElementById('custom_tile_percentage').value / 100; // Convert to decimal
+            
+            const requestData = {
+                depth_map_path: window.depthMapPath,
+                texture_types: textureTypes,
+                custom_texture_paths: customTexturePaths,
+                effect: effect
+            };
+            
+            if (useCustomParams) {
+                requestData.custom_beta = customBeta;
+                requestData.custom_tile_percentage = customTilePercentage;
+            }
+            
+            // Show loading message
+            document.getElementById('createResults').innerHTML = '<div class="alert alert-info">Generating stereograms... please wait.</div>';
+            
+            fetch('/generate-stereogram', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const resultsContainer = document.getElementById('createResults');
+                    resultsContainer.innerHTML = '<h4>Generated Stereograms</h4>';
+                    
+                    data.results.forEach(result => {
+                        const resultCard = document.createElement('div');
+                        resultCard.className = 'card result-card';
+                        resultCard.innerHTML = `
+                            <div class="card-body">
+                                <h5 class="card-title">${result.texture_type}</h5>
+                                <div style="height: 200px; display: flex; align-items: center; justify-content: center;">
+                                    <img src="${result.stereogram_preview}" style="max-height: 200px; max-width: 100%;" />
+                                </div>
+                            </div>
+                        `;
+                        resultsContainer.appendChild(resultCard);
+                    });
+                } else {
+                    showMessage(document.getElementById('createResults'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('createResults'), 'Error: ' + error);
+            });
+        });
+        
+        // Upload stereogram for style transfer
+        document.getElementById('uploadTransferStereogramForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('/upload-stereogram', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showImage(document.getElementById('transferStereogramPreviewContainer'), `/static/uploads/${data.stereogram_id}_${document.getElementById('transferStereogramFile').files[0].name}`, 'Original Stereogram');
+                    showImage(document.getElementById('extractedDepthPreviewContainer'), data.depth_map_preview, 'Extracted Depth Map');
+                    document.getElementById('transferTextureSelection').style.display = 'block';
+                    window.transferStereogramPath = data.stereogram_path;
+                } else {
+                    showMessage(document.getElementById('transferResults'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('transferResults'), 'Error: ' + error);
+            });
+        });
+        
+        // Upload texture for style transfer
+        document.getElementById('uploadTransferTextureForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('/upload-texture', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const textureContainer = document.getElementById('uploadedTransferTextures');
+                    const textureDiv = document.createElement('div');
+                    textureDiv.className = 'custom-transfer-texture mb-3';
+                    textureDiv.innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Custom Texture</h5>
+                                <div style="height: 100px; display: flex; align-items: center; justify-content: center;">
+                                    <img src="${data.texture_preview}" style="max-height: 100px; max-width: 100%;" />
+                                </div>
+                                <input type="hidden" class="texture-path" value="${data.texture_path}" />
+                            </div>
+                        </div>
+                    `;
+                    textureContainer.appendChild(textureDiv);
+                } else {
+                    showMessage(document.getElementById('transferResults'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('transferResults'), 'Error: ' + error);
+            });
+        });
+        
+        // Transfer style
+        document.getElementById('transferStyleBtn').addEventListener('click', function() {
+            if (!window.transferStereogramPath) {
+                showMessage(document.getElementById('transferResults'), 'Please upload a stereogram first');
+                return;
+            }
+            
+            // Get selected texture types
+            const textureTypes = Array.from(document.querySelectorAll('.transfer-texture-type:checked')).map(cb => cb.value);
+            
+            // Get custom textures
+            const customTexturePaths = Array.from(document.querySelectorAll('.custom-transfer-texture .texture-path')).map(input => input.value);
+            
+            // Get effect strength
+            const effect = document.getElementById('transferEffectStrength').value;
+            
+            // Get custom parameters
+            const p_min = document.getElementById('transfer_p_min').value;
+            const p_max = document.getElementById('transfer_p_max').value;
+            const customBeta = document.getElementById('transfer_custom_beta').value;
+            const customTilePercentage = document.getElementById('transfer_custom_tile_percentage').value / 100; // Convert to decimal
+            
+            const requestData = {
+                stereogram_path: window.transferStereogramPath,
+                texture_types: textureTypes,
+                custom_texture_paths: customTexturePaths,
+                effect: effect,
+                p_min: p_min,
+                p_max: p_max,
+                custom_beta: customBeta,
+                custom_tile_percentage: customTilePercentage
+            };
+            
+            // Show loading message
+            document.getElementById('transferResults').innerHTML = '<div class="alert alert-info">Transferring style... please wait.</div>';
+            
+            fetch('/transfer-style', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showImage(document.getElementById('extractedDepthPreviewContainer'), data.depth_map_preview, 'Extracted Depth Map');
+                    
+                    const resultsContainer = document.getElementById('transferResults');
+                    resultsContainer.innerHTML = '<h4>Style Transfer Results</h4>';
+                    
+                    data.results.forEach(result => {
+                        const resultCard = document.createElement('div');
+                        resultCard.className = 'card result-card';
+                        resultCard.innerHTML = `
+                            <div class="card-body">
+                                <h5 class="card-title">${result.texture_type}</h5>
+                                <div style="height: 200px; display: flex; align-items: center; justify-content: center;">
+                                    <img src="${result.stereogram_preview}" style="max-height: 200px; max-width: 100%;" />
+                                </div>
+                            </div>
+                        `;
+                        resultsContainer.appendChild(resultCard);
+                    });
+                } else {
+                    showMessage(document.getElementById('transferResults'), data.error);
+                }
+            })
+            .catch(error => {
+                showMessage(document.getElementById('transferResults'), 'Error: ' + error);
+            });
+        });
+    </script>
+</body>
+</html> 
